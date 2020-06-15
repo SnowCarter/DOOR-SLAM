@@ -1,0 +1,7 @@
+function send_start_optimization_flag() {
+    if (start_optimization_triggered() == 1) {
+        update_adjacency_vector()
+        neighbors.broadcast("start_optimization", adjacency_vector)
+        update_has_sent_start_optimization_flag()
+    }
+}

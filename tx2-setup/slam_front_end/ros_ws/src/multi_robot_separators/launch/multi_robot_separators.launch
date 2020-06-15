@@ -1,0 +1,134 @@
+<launch>
+<!-- Change these parameters -->
+<arg name="local_robot_id" />
+<arg name="other_robot_id" />
+<arg name="frame_id" />
+<arg name="estimate_stereo_transform_from_tf" default="false" />
+
+<arg name="topic_left_image_rect" />
+<arg name="topic_right_image_rect" />
+<arg name="topic_left_camera_info" />
+<arg name="topic_right_camera_info" />
+<arg name="topic_rgb_image_rect" />
+
+<arg name="set_fixed_covariance" default="true" />
+<arg name="translation_std" default="0.1" />
+<arg name="rotation_std" default="0.01" />
+
+<!-- Parameters of our system -->
+<arg name="netvlad_distance" default="0.13" />
+<arg name="netvlad_dimensions" default="128" />
+<arg name="netvlad_batch_size" default="3" />
+<arg name="netvlad_max_matches_nb" default="20" />
+<arg name="separators_min_inliers" default="5" />
+<arg name="number_of_kf_skipped" default="0" />
+
+<arg name="use_estimates_of_poses" default="true" />
+<arg name="approx_sync" default="false" />
+
+<arg name="log_pos" default="true" />
+<arg name="log_gps" default="false" />
+<arg name="gps_topic_name" default="dji_sdk/global_position" />
+
+<arg name="logs_location" default="/root/rdpgo_ws/src/robust_distributed_slam_module/scripts/log/"/>
+
+<arg name="fcu_port" default="/dev/ttyTHS2" />
+<arg name="baud_rate" default="115200" />
+
+
+<!-- arg name="fcu_url" default="/dev/ttyTHS2:57600" />
+<arg name="gcs_url" default="" />
+<arg name="tgt_system" default="1" />
+<arg name="tgt_component" default="1" />
+<arg name="log_output" default="screen" />
+<arg name="fcu_protocol" default="v2.0" />
+<arg name="respawn_mavros" default="false" /-->
+<!-- Change the robot id here too! -->
+  <group ns="robot_$(arg local_robot_id)">
+
+    <!-- Don't forget to change the robot ID in the name space! -->
+    <param name="local_robot_id" type="int" value="$(arg local_robot_id)" />
+    <param name="other_robot_id" type="int" value="$(arg other_robot_id)" />
+    <param name="frame_id"      type="string" value="$(arg frame_id)"/>
+    <param name="estimate_stereo_transform_from_tf" type="bool" value="$(arg estimate_stereo_transform_from_tf)"/>
+
+   <!-- Covariance of separators parameters -->
+    <param name="set_fixed_covariance" type="bool" value="$(arg set_fixed_covariance)" />
+    <param name="translation_std" type="double" value="$(arg translation_std)" />
+    <param name="rotation_std" type="double" value="$(arg rotation_std)" />
+
+   <!-- Also send estimates of poses with separators found. Requires to have a service to compute those advertised -->
+    <param name="use_estimates_of_poses" type="bool" value="$(arg use_estimates_of_poses)" />
+
+    <param name="logs_location"      type="string" value="$(arg logs_location)"/>
+    <param name="log_gps" type="bool" value="$(arg log_gps)" />
+    <param name="gps_topic_name"      type="string" value="$(arg gps_topic_name)"/>
+
+
+    <!-- Remapping image topics -->
+    <remap from="rgb/image_rect" to="$(arg topic_rgb_image_rect)"/>
+    <remap from="left/image_rect" to="$(arg topic_left_image_rect)"/>
+    <remap from="right/image_rect" to="$(arg topic_right_image_rect)"/>
+    <remap from="left/camera_info" to="$(arg topic_left_camera_info)"/>
+    <remap from="right/camera_info" to="$(arg topic_right_camera_info)"/>
+
+    <remap from="gps_topic" to="/robot_$(arg local_robot_id)/$(arg gps_topic_name)"/>
+ 
+
+    <!-- Parameters of mult-robot-separators nodes -->
+    <param name="netvlad_distance" type="double" value="$(arg netvlad_distance)" />
+    <param name="netvlad_dimensions" type="int" value="$(arg netvlad_dimensions)" />
+    <param name="netvlad_batch_size" type="int" value="$(arg netvlad_batch_size)" />
+    <param name="netvlad_max_matches_nb" type="int" value="$(arg netvlad_max_matches_nb)" />
+    <param name="separators_min_inliers" type="int" value="$(arg separators_min_inliers)" />
+    <param name="number_of_kf_skipped" type="int" value="$(arg number_of_kf_skipped)" />
+
+
+    <!-- Nodes to run -->
+    <node pkg="multi_robot_separators" type="stereo_cam_geometric_tools" name="stereo_cam_geometric_tools" output="screen" />
+    <node pkg="multi_robot_separators" type="find_separators.py" name="find_separators" output="screen"/>
+    <!--node pkg="multi_robot_separators" type="factor_graph" name="factor_graph"/-->
+    <node pkg="multi_robot_separators" type="communication" name="communication" output="screen"/>
+
+
+    <arg name="stereo_odom_start_delay" default="0.0" />
+    <!-- Stereo Odometry -->
+    <node pkg="rtabmap_ros" type="stereo_odometry" name="stereo_odometry" output="screen" launch-prefix="bash -c 'sleep $(arg stereo_odom_start_delay); $0 $@' " >
+      <param name="frame_id"      type="string" value="$(arg frame_id)"/>
+      <param name="estimate_stereo_transform_from_tf" type="bool" value="$(arg estimate_stereo_transform_from_tf)"/>
+      <param name="Odom/Strategy"      type="string" value="0"/> <!--  0=Frame-to-Map, 1=Frame=to=Frame-->
+        <!-- <param name="Odom/ImageBufferSize"  type="string" value="0"/>  -->
+        <!-- <param name="Vis/EstimationType" type="string" value="1"/> 0=3D->3D 1=3D->2D (PnP) -->
+        <!-- <param name="Vis/PnPFlags"       type="string" value="0"/> -->
+        <!-- <param name="Vis/PnPReprojError"     type="string" value="1"/> -->
+        <!-- <param name="Vis/CorFlowWinSize"     type="string" value="15"/> -->
+      <param name="Vis/CorType"     type="string" value="1"/>
+        <!-- <param name="GFTT/MinDistance"   type="string" value="10"/> -->
+        <!-- <param name="GFTT/QualityLevel"  type="string" value="0.002"/>  -->
+        <!-- <param name="Icp/CorrespondenceRatio"  type="string" value="0.1"/>  -->
+        <!-- <param name="Icp/Iterations"  type="string" value="10"/>  -->
+        <!-- <param name="Icp/MaxCorrespondenceDistance"  type="string" value="0.3"/>  -->
+        <!-- <param name="Icp/PointToPlane"  type="string" value="true"/>  -->
+        <!-- <param name="Icp/MaxTranslation"  type="string" value="0"/>  -->
+        <!-- <param name="Icp/VoxelSize"  type="string" value="0"/>  -->
+        <!-- <param name="Icp/Epsilon"  type="string" value="0.01"/>  -->
+        <!-- <param name="Reg/Strategy"  type="string" value="0"/>  -->
+      <param name="OdomF2M/MaxSize" type="string" value="1000"/> 
+      <param name="Vis/MaxFeatures" type="string" value="600"/>
+      <param name="approx_sync" type="bool" value="$(arg approx_sync)"/>
+    </node>
+
+  <group if="$(arg log_pos)">
+    	
+    <include file="$(find dji_sdk)/launch/sdk_manifold.launch">
+        <arg name="fcu_port" value="$(arg fcu_port)"/>
+        <arg name="baud_rate" value="$(arg baud_rate)"/>
+    </include>
+
+    <node pkg="rosbag" type="record" name="rosbag_record_log_pos"
+       args="record -o $(arg logs_location)pos_logs -e /robot_$(arg local_robot_id)/dji_sdk/(.*) /robot_$(arg local_robot_id)/odom_info /tf /tf_static"/>
+  </group>
+
+
+  </group>
+</launch>
